@@ -11,7 +11,12 @@ contract TicTacToe {
         uint winner;
     }
     
+    event GameStart(int game);
+    event Turn(int game, uint col, uint row, uint mark);
+    event GameEnd(int game, address winner);
+    
     address public owner;
+
     mapping(int => Game) games;
     mapping(address => int) participations;
     
@@ -19,7 +24,6 @@ contract TicTacToe {
 
     constructor() public {
         owner = msg.sender;
-        
         gameNumber = 1;
     }
     
@@ -44,14 +48,18 @@ contract TicTacToe {
             return gameNumber;
         } else {
             game.second = msg.sender;
-            gameNumber += 1;
             
+            emit GameStart(gameNumber);
+            
+            gameNumber += 1;
             return gameNumber - 1;
         }
     }
     
     function turn(uint col, uint row) public participated {
-        Game storage game = getMyGame();
+        int gameId = participations[msg.sender];
+        
+        Game storage game = games[gameId];
         require(col >= 0 && col <= 2 && row >= 0 && row <= 2);
         
         require(game.second != 0x0);
@@ -69,6 +77,7 @@ contract TicTacToe {
         if(game.turn && game.second == msg.sender) {
             game.deck[index] = myMark;
             game.turn = false;
+            emit Turn(gameId, col, row, myMark);
         } else if(!game.turn && game.first == msg.sender) {
             game.deck[index] = myMark;
             game.turn = true;
@@ -80,16 +89,30 @@ contract TicTacToe {
             game.winner = myMark;
             participations[game.first] = 0;
             participations[game.second] = 0;
+            
+            emit GameEnd(gameId, getWinner(gameId));
         }
     }
     
     function hasWon(uint[9] deck, uint mark) private pure returns (bool) {
-        uint8[24] memory winPositions = [0,1,2,3,4,5,6,7,8,0,3,6,1,4,5,2,6,8,0,4,8,2,4,6];
+        require(mark == 1 || mark == 2);
         
-        for(uint i=0;i<6;i++) {
-            uint start = i*3;
+        uint8[24] memory winPositions = [
+            0, 1, 2,
+            3, 4, 5,
+            6, 7, 8,
+            0, 3, 6,
+            1, 4, 7,
+            2, 5, 8,
+            0, 4, 8,
+            2, 4, 6];
+        
+        for(uint i=0; i<6; i++) {
+            uint start = i * 3;
             
-            if(deck[winPositions[start]] == mark && deck[winPositions[start + 1]] == mark && deck[winPositions[start + 2]] == mark)
+            if(deck[winPositions[start]] == mark 
+            && deck[winPositions[start + 1]] == mark 
+            && deck[winPositions[start + 2]] == mark)
                 return true;
         }
         
@@ -98,5 +121,16 @@ contract TicTacToe {
     
     function getMyGame() private view participated returns (Game storage) {
         return games[participations[msg.sender]];
+    }
+    
+    function getWinner(int gameId) public view returns (address) {
+        Game storage game = games[gameId];
+        
+        if(game.winner == 1) {
+            return game.first;
+        } else if(game.winner == 2) {
+            return game.second;
+        }
+        return 0x0;
     }
 }
